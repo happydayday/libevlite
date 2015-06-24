@@ -2,6 +2,7 @@
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <syslog.h>
 #include <assert.h>
 
 #include "utils.h"
@@ -32,9 +33,6 @@ const struct eventop * evsel = NULL;
 static inline int32_t evsets_process_active( struct eventset * self );
 static inline int32_t event_list_insert( struct eventset * self, struct event * ev, int32_t type );
 static inline int32_t event_list_remove( struct eventset * self, struct event * ev, int32_t type );
-
-static inline void evsets_clear_now( struct eventset * self );
-static inline int64_t evsets_get_now( struct eventset * self );
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
@@ -156,8 +154,6 @@ void event_set( event_t self, int32_t fd, int16_t ev )
 
     e->fd = fd;
     e->events = ev;
-
-    return;
 }
 
 void event_set_callback( event_t self, void (*cb)(int32_t, int16_t, void *), void * arg )
@@ -166,8 +162,6 @@ void event_set_callback( event_t self, void (*cb)(int32_t, int16_t, void *), voi
 
     e->cb = cb;
     e->arg = arg;
-
-    return;
 }
 
 int32_t event_get_fd( event_t self )
@@ -342,14 +336,11 @@ int32_t evsets_dispatch( evsets_t self )
     int32_t seconds4wait = 0;
     struct eventset * sets = (struct eventset *)self;
 
-    // 清空时间缓存
-    evsets_clear_now( sets );
-
     // 没有激活事件的情况下等待超时时间
     if ( TAILQ_EMPTY(&sets->activelist) )
     {
         // 根据定时器的超时时间, 确认IO的等待时间
-        seconds4wait = (int32_t)( sets->expire_time - evsets_get_now(sets) );
+        seconds4wait = (int32_t)( sets->expire_time - mtime() );
         if ( seconds4wait < 0 )
         {
             seconds4wait = 0;
@@ -364,35 +355,21 @@ int32_t evsets_dispatch( evsets_t self )
     res = sets->evselect->dispatch( sets, sets->evsets, seconds4wait );
     if ( res < 0 )
     {
-        return -1;
+        // IO事件出错
+        syslog(LOG_WARNING, "%s() eventsets dispatch error <%d>", __FUNCTION__, res);
     }
 
     // 事件集的超时时间是要及时更新的
-    evsets_clear_now( sets );
-    if ( sets->expire_time <= evsets_get_now(sets) )
+    int64_t now = mtime();
+    if ( sets->expire_time <= now )
     {
         // 定时器时间到了, 分发事件
-        res += evtimer_dispatch( sets->core_timer );
-        sets->expire_time = evsets_get_now(sets) + sets->timer_precision;
+        evtimer_dispatch( sets->core_timer );
+        sets->expire_time = now + sets->timer_precision;
     }
 
     // 处理所有事件, 并回调定义好的函数
     return evsets_process_active( sets );
-}
-
-void evsets_clear_now( struct eventset * self )
-{
-    self->cache_now = 0;
-}
-
-int64_t evsets_get_now( struct eventset * self )
-{
-    if ( self->cache_now == 0 )
-    {
-        self->cache_now = mtime();
-    }
-
-    return self->cache_now;
 }
 
 void evsets_destroy( evsets_t self )
@@ -441,8 +418,6 @@ void evsets_destroy( evsets_t self )
     // 销毁IO实例
     sets->evselect->final( sets->evsets );
     free( sets );
-
-    return ;
 }
 
 int32_t evsets_process_active( struct eventset * self )

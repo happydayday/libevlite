@@ -7,6 +7,7 @@
 
 #include <sys/types.h>
 #include <sys/uio.h>
+#include <syslog.h>
 #include <unistd.h>
 
 #include "utils.h"
@@ -16,7 +17,7 @@
 // 创建网络线程组
 // nthreads     - 网络线程组中的线程数
 // method       - 任务处理函数
-iothreads_t iothreads_start( uint8_t nthreads,
+iothreads_t iothreads_start( uint8_t nthreads, uint8_t realtime,
         void (*method)(void *, uint8_t, int16_t, void *), void * context )
 {
     uint8_t i = 0;
@@ -35,8 +36,9 @@ iothreads_t iothreads_start( uint8_t nthreads,
         iothreads = NULL;
     }
 
-    iothreads->method     = method;
-    iothreads->context    = context;
+    iothreads->method   = method;
+    iothreads->realtime = realtime;
+    iothreads->context  = context;
     iothreads->nthreads = nthreads;
     pthread_cond_init( &iothreads->cond, NULL );
     pthread_mutex_init( &iothreads->lock, NULL );
@@ -129,8 +131,6 @@ void iothreads_stop( iothreads_t self )
     }
 
     free ( iothreads );
-
-    return;
 }
 
 // -----------------------------------------------------------------------------
@@ -185,10 +185,8 @@ int32_t iothread_start( struct iothread * self, uint8_t index, iothreads_t paren
 
 int32_t iothread_post( struct iothread * self, int16_t type, int16_t utype, void * task, uint8_t size )
 {
-    struct task inter_task;
-
-    inter_task.type        = type;
-    inter_task.utype    = utype;
+    struct iothreads * threads = self->parent;
+    struct task inter_task = { .type=type, .utype=utype };
 
     if ( size == 0 )
     {
@@ -200,7 +198,7 @@ int32_t iothread_post( struct iothread * self, int16_t type, int16_t utype, void
     }
 
     // 默认: 提交任务不提醒消费者
-    return msgqueue_push( self->queue, &inter_task, POST_IOTASK_AND_NOTIFY );
+    return msgqueue_push( self->queue, &inter_task, threads->realtime );
 }
 
 int32_t iothread_stop( struct iothread * self )
@@ -229,6 +227,8 @@ int32_t iothread_stop( struct iothread * self )
 
 void * iothread_main( void * arg )
 {
+    uint32_t maxtasks = 0;
+
     struct iothread * thread = (struct iothread *)arg;
     struct iothreads * parent = (struct iothreads *)(thread->parent);
 
@@ -247,6 +247,9 @@ void * iothread_main( void * arg )
 
         // 交换任务队列
         msgqueue_swap( thread->queue, &doqueue );
+
+        // 获取最大任务数
+        maxtasks = MAX( maxtasks, QUEUE_COUNT(taskqueue)(&doqueue) );
 
         // 处理任务
         while ( QUEUE_COUNT(taskqueue)(&doqueue) > 0 )
@@ -291,6 +294,9 @@ void * iothread_main( void * arg )
     pthread_cond_signal( &parent->cond );
     pthread_mutex_unlock( &parent->lock );
 
+    syslog( LOG_INFO, "%s(INDEX=%d) : the Maximum Number of Requests is %d in EachFrame .",
+            __FUNCTION__, thread->index, maxtasks );
+
     return NULL;
 }
 
@@ -301,14 +307,10 @@ void iothread_on_command( int32_t fd, int16_t ev, void * arg )
     if ( ev & EV_READ )
     {
         char buf[ 64 ];
-        int32_t nread = 0;
 
-        nread = read( fd, buf, sizeof(buf) );
-        if ( nread == -1 )
+        if ( read( fd, buf, sizeof(buf) ) == -1 )
         {
             //
         }
     }
-
-    return;
 }

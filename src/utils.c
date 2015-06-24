@@ -7,8 +7,25 @@
 #include <errno.h>
 
 #include <sys/time.h>
+#include <sys/syscall.h>
 
 #include "utils.h"
+
+#if defined(__linux__)
+
+__thread pid_t t_cached_threadid = 0;
+
+pid_t threadid()
+{
+    if ( t_cached_threadid == 0 )
+    {
+        t_cached_threadid = syscall( SYS_gettid );
+    }
+
+    return t_cached_threadid;
+}
+
+#endif
 
 int64_t mtime()
 {
@@ -72,7 +89,7 @@ int32_t tcp_accept( int32_t fd, char * remotehost, uint16_t * remoteport )
     return cfd;
 }
 
-int32_t tcp_listen( char * host, uint16_t port, void (*options)(int32_t) )
+int32_t tcp_listen( const char * host, uint16_t port, void (*options)(int32_t) )
 {
     int32_t fd = -1;
     struct sockaddr_in addr;
@@ -88,7 +105,7 @@ int32_t tcp_listen( char * host, uint16_t port, void (*options)(int32_t) )
 
     memset( &addr, 0, sizeof(addr) );
     addr.sin_family = AF_INET;
-    addr.sin_port    = htons( port );
+    addr.sin_port   = htons( port );
     if ( host != NULL && strlen(host) > 0 )
     {
         addr.sin_addr.s_addr = inet_addr( host );
@@ -113,16 +130,21 @@ int32_t tcp_listen( char * host, uint16_t port, void (*options)(int32_t) )
     return fd;
 }
 
-int32_t tcp_connect( char * host, uint16_t port, void (*options)(int32_t) )
+int32_t tcp_connect( const char * host, uint16_t port, void (*options)(int32_t) )
 {
     int32_t fd = -1;
     int32_t rc = -1;
     struct sockaddr_in addr;
 
+    if ( host == NULL )
+    {
+        return -1;
+    }
+
     fd = socket( AF_INET, SOCK_STREAM, 0 );
     if ( fd < 0 )
     {
-        return -1;
+        return -2;
     }
 
     // 对描述符的选项操作
@@ -288,7 +310,6 @@ void sidlist_destroy( struct sidlist * self )
     }
 
     free(self);
-    return;
 }
 
 // -----------------------------------------------------------------------------------------------------------------
@@ -357,10 +378,8 @@ int32_t msgqueue_push( struct msgqueue * self, struct task * task, uint8_t isnot
     if ( rc == 0 && isbc == 1 )
     {
         char buf[1] = {0};
-        int32_t nwrite = 0;
 
-        nwrite = write( self->pushfd, buf, 1 );
-        if ( nwrite != 1 )
+        if ( write( self->pushfd, buf, 1 ) != 1 )
         {
             //
         }

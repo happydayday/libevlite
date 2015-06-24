@@ -13,7 +13,7 @@ uint8_t runflags;
 struct iothread_args
 {
     uint64_t    taskcount;
-    uint64_t     padding[7];
+    uint64_t    padding[7];
 };
 
 void task_method( void * context, uint8_t index, int16_t type, void * task )
@@ -27,16 +27,12 @@ void task_method( void * context, uint8_t index, int16_t type, void * task )
     {
         //usleep(2);
     }
-
-    return;
 }
 
 void signal_handler( int32_t signo )
 {
     printf("receive a quit signal \n");
     runflags = 0;
-
-    return ;
 }
 
 int32_t main()
@@ -55,7 +51,7 @@ int32_t main()
     signal( SIGINT, signal_handler );
 
     //
-    threadgroup = iothreads_start( nthreads, task_method, NULL );
+    threadgroup = iothreads_start( nthreads, 0, task_method, NULL );
     if ( threadgroup == NULL )
     {
         printf("iothreads_start() failed \n");

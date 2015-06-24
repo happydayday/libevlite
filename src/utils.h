@@ -28,6 +28,9 @@ extern "C"
 #define likely(x)       __builtin_expect( (x), 1 )
 #define unlikely(x)     __builtin_expect( (x), 0 )
 
+#define MAX( a, b )     ( (a) > (b) ? (a) : (b) )
+#define MIN( a, b )     ( (a) < (b) ? (a) : (b) )
+
 //
 // 系统相关的操作
 //
@@ -35,12 +38,17 @@ extern "C"
 // 时间函数, 返回毫秒数
 int64_t mtime();
 
+// 获取线程ID
+#if defined(__linux__)
+pid_t threadid();
+#endif
+
 // socket基本操作
 int32_t is_connected( int32_t fd );
 int32_t set_non_block( int32_t fd );
 int32_t tcp_accept( int32_t fd, char * remotehost, uint16_t * remoteport );
-int32_t tcp_listen( char * host, uint16_t port, void (*options)(int32_t) );
-int32_t tcp_connect( char * host, uint16_t port, void (*options)(int32_t) );
+int32_t tcp_listen( const char * host, uint16_t port, void (*options)(int32_t) );
+int32_t tcp_connect( const char * host, uint16_t port, void (*options)(int32_t) );
 
 //
 // 基础算法类
@@ -77,7 +85,11 @@ enum
 };
 
 // 任务填充长度
-#define TASK_PADDING_SIZE       56
+#if defined( __i386__ )
+    #define TASK_PADDING_SIZE   60
+#elif defined( __x86_64__ )
+    #define TASK_PADDING_SIZE   56
+#endif
 
 // 任务数据
 struct task

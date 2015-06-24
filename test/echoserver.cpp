@@ -120,5 +120,6 @@ int main()
     printf("EchoServer stoping ...\n");
     service->stop();
     delete service;
+
     return 0;
 }

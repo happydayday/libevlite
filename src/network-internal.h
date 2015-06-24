@@ -18,7 +18,7 @@
 #define TRY_RECONNECT_INTERVAL          20
 
 // 发送接收缓冲区设置
-#define SEND_BUFFER_SIZE                0
+#define SEND_BUFFER_SIZE                4096
 #define RECV_BUFFER_SIZE                4096
 
 
@@ -33,6 +33,7 @@ enum
     eIOTaskType_Broadcast       = 5,
     eIOTaskType_Shutdown        = 6,
     eIOTaskType_Shutdowns       = 7,
+    eIOTaskType_Broadcast2      = 8,
 };
 
 // 网络服务错误码定义

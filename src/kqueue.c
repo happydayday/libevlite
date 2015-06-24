@@ -1,4 +1,6 @@
 
+#if defined(__FreeBSD__) || defined(__APPLE__) || defined(__darwin__) || defined(__OpenBSD__)
+
 #include <stdio.h>
 #include <errno.h>
 #include <unistd.h>
@@ -261,7 +263,7 @@ int32_t kqueue_dispatch( struct eventset * sets, void * arg, int32_t tv )
                 continue;
             }
 
-            errno = poller->events[i].data;
+            errno = (int32_t)poller->events[i].data;
             return -2;
         }
 
@@ -314,5 +316,6 @@ void kqueue_final( void * arg )
     }
 
     free( poller );
-    return ;
 }
+
+#endif
